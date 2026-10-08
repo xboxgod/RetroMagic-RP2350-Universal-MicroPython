@@ -136,7 +136,7 @@ jobs:
             make -C ports/rp2 BOARD=RETROMAGIC_RP2350 clean
             make -C ports/rp2 BOARD=RETROMAGIC_RP2350 -j$(nproc)
             
-            TARGET_FILENAME="RetroMagic_RP2350_${SIZE}MB_${CLEAN_MP_VERSION}.uf2"
+            TARGET_FILENAME="RetroMagic_MicroPython_RP2350_${SIZE}MB_${CLEAN_MP_VERSION}.uf2"
             cp ports/rp2/build-RETROMAGIC_RP2350/firmware.uf2 "${TARGET_FILENAME}"
             echo "✅ ${SIZE}MB 版本编译完成：${TARGET_FILENAME}"
             
@@ -146,7 +146,7 @@ jobs:
         if: steps.check_release.outputs.should_build == 'true'
         shell: bash
         run: |
-          UF2_FILE=$(ls RetroMagic_RP2350_4MB_*.uf2)
+          UF2_FILE=$(ls RetroMagic_MicroPython_RP2350_4MB_*.uf2)
           echo "=== 检查 UF2 Family ID (偏移 28-31 字节) ==="
           HEX_ID=$(xxd -s 28 -l 4 "$UF2_FILE" | awk '{print $2$3}' | tr -d ' \n\r')
           echo "读取到的 Family ID (16进制): $HEX_ID"
@@ -193,5 +193,5 @@ jobs:
           name: RetroMagic RP2350 Firmware (${{ env.MP_VERSION }})
           prerelease: false
           fail_on_unmatched_files: true
-          files: RetroMagic_RP2350_*.uf2
+          files: RetroMagic_MicroPython_RP2350_*.uf2
           body_path: release_notes.md
