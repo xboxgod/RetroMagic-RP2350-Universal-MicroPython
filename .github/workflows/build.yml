@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+# 🔑 赋予 GitHub Actions 创建 Release 和上传文件的写权限
+permissions:
+  contents: write
+
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
@@ -70,13 +74,11 @@ jobs:
           BOARD_DIR="ports/rp2/boards/RETROMAGIC_RP2350"
           mkdir -p $BOARD_DIR
 
-          # 写入规范的 CMake 参数定义（修复 STREQUAL rp2350 报错的关键）
           cat << 'EOF' > $BOARD_DIR/mpconfigboard.cmake
           set(MICROPY_BOARD_TARGET "rp2350-arm-s")
           set(PICO_BOARD "pico2")
           EOF
 
-          # 写入板级 C 语言头文件定义
           cat << 'EOF' > $BOARD_DIR/mpconfigboard.h
           #ifndef MICROPY_INCLUDED_MPCONFIGBOARD_H
           #define MICROPY_INCLUDED_MPCONFIGBOARD_H
@@ -106,10 +108,8 @@ jobs:
             echo "🚀 开始编译 ${SIZE}MB 版本 (Flash Bytes: ${BYTES})..."
             echo "=================================================="
 
-            # 清理历史构建缓存，防止跨配置干扰
             rm -rf "${BUILD_DIR}"
 
-            # 执行编译
             make BOARD=RETROMAGIC_RP2350 \
                  BUILD="${BUILD_DIR}" \
                  CMAKE_ARGS="-DPICO_FLASH_SIZE_BYTES=${BYTES} -DPICO_EMBED_XIP_SETUP=1 -DPICO_FLASH_SPI_CLKDIV=6" \
