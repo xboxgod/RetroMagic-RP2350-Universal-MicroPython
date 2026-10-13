@@ -2,8 +2,8 @@ name: Build RetroMagic RP2350
 
 on:
   schedule:
-    - cron: '0 8 * * *' # 每天 UTC 08:00 自动检查编译
-  workflow_dispatch: # 支持手动触发
+    - cron: '0 8 */3 * *' # 🕒 1. 修改点：从每天改为每 3 天（72小时）自动检查
+  workflow_dispatch: # 支持手动触发（将保持覆盖逻辑）
   push:
     branches:
       - main
@@ -27,32 +27,36 @@ jobs:
       - name: Get MicroPython Official Version & Commit
         id: get_version
         run: |
-          VERSION=$(git describe --tags --always)
-          COMMIT=$(git rev-parse --short HEAD)
-          CLEAN_VERSION=$(echo "$VERSION" | sed 's/[^a-zA-Z0-9._-]/_/g')
-          echo "version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-          echo "commit=$COMMIT" >> $GITHUB_OUTPUT
-          echo "MicroPython Version: $CLEAN_VERSION ($COMMIT)"
+          VERSION=\$(git describe --tags --always)
+          COMMIT=\$(git rev-parse --short HEAD)
+          CLEAN_VERSION=(echo "VERSION" | sed 's/[^a-zA-Z0-9._-]/_/g')
+          DATE_SUFFIX=\$(date +'%Y%m%d')
+          echo "version=\(CLEAN_VERSION" >> \)GITHUB_OUTPUT
+          echo "commit=COMMIT" >> GITHUB_OUTPUT
+          echo "date_suffix=\(DATE_SUFFIX" >> \)GITHUB_OUTPUT
+          echo "MicroPython Version: \(CLEAN_VERSION (\)COMMIT)"
 
       - name: Smart Check Build Eligibility
         id: check_release
         run: |
-          # 手动触发或 Push 触发时强制构建
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] \vert{}\vert{} [ "${{ github.event_name }}" = "push" ]; then
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "🚀 手动/推送触发，强制启动构建。"
+          # 🛠️ 2. 修改点：手动/推送触发时用原版号（触发覆盖）；定时检查时带日期后缀（独立发版）
+          if [ "\({{ github.event_name }}" = "workflow_dispatch" ] \vert{}\vert{} [ "\){{ github.event_name }}" = "push" ]; then
+            echo "should_build=true" >> \$GITHUB_OUTPUT
+            echo "final_tag=\({{ steps.get_version.outputs.version }}" >> \)GITHUB_OUTPUT
+            echo "🚀 手动/推送触发，强制启动构建。将更新覆盖现有 Release。"
           else
-            # 定时触发时，检查最新 Release 是否已存在
-            TAG_NAME="${{ steps.get_version.outputs.version }}"
-            HTTP_STATUS=$(curl -s -o /dev/null -w "\%{http_code}" -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG_NAME}")
+            # 定时触发时，检查带日期后缀的唯一 Tag 是否已存在
+            TAG_NAME="\({{ steps.get_version.outputs.version }}-\){{ steps.get_version.outputs.date_suffix }}"
+            HTTP_STATUS=\((curl -s -o /dev/null -w "\%{http_code}" -H "Authorization: token \){{ secrets.GITHUB_TOKEN }}" \
+              "https://github.com github.repository /releases/tags/{TAG_NAME}")
             
-            if [ "$HTTP_STATUS" -eq 200 ]; then
-              echo "should_build=false" >> $GITHUB_OUTPUT
-              echo "⏭️ 版本 ${TAG_NAME} 已存在，跳过构建。"
+            if [ "\$HTTP_STATUS" -eq 200 ]; then
+              echo "should_build=false" >> \$GITHUB_OUTPUT
+              echo "⏭️ 版本 \${TAG_NAME} 已存在，跳过构建。"
             else
-              echo "should_build=true" >> $GITHUB_OUTPUT
-              echo "🚀 发现 MicroPython 新版本 ${TAG_NAME}，启动构建！"
+              echo "should_build=true" >> \$GITHUB_OUTPUT
+              echo "final_tag=\({TAG_NAME}" >> \)GITHUB_OUTPUT
+              echo "🚀 发现 MicroPython 新变动或今日未构建，启动新构建：\${TAG_NAME}"
             fi
           fi
 
@@ -65,21 +69,21 @@ jobs:
       - name: Build mpy-cross and Update Submodules
         if: steps.check_release.outputs.should_build == 'true'
         run: |
-          make -C mpy-cross -j$(nproc)
+          make -C mpy-cross -j\$(nproc)
           make -C ports/rp2 submodules
 
       - name: Setup Board Configuration
         if: steps.check_release.outputs.should_build == 'true'
         run: |
           BOARD_DIR="ports/rp2/boards/RETROMAGIC_RP2350"
-          mkdir -p $BOARD_DIR
+          mkdir -p \$BOARD_DIR
 
-          cat << 'EOF' > $BOARD_DIR/mpconfigboard.cmake
+          cat << 'EOF' > \$BOARD_DIR/mpconfigboard.cmake
           set(MICROPY_BOARD_TARGET "rp2350-arm-s")
           set(PICO_BOARD "pico2")
           EOF
 
-          cat << 'EOF' > $BOARD_DIR/mpconfigboard.h
+          cat << 'EOF' > \$BOARD_DIR/mpconfigboard.h
           #ifndef MICROPY_INCLUDED_MPCONFIGBOARD_H
           #define MICROPY_INCLUDED_MPCONFIGBOARD_H
 
@@ -92,34 +96,34 @@ jobs:
       - name: Matrix Compile (2MB, 4MB, 8MB, 16MB)
         if: steps.check_release.outputs.should_build == 'true'
         run: |
-          CLEAN_MP_VERSION="${{ steps.get_version.outputs.version }}"
+          CLEAN_MP_VERSION="\${{ steps.get_version.outputs.version }}"
           cd ports/rp2
 
           SIZES=("2" "4" "8" "16")
           BYTES_LIST=(2097152 4194304 8388608 16777216)
 
-          for i in "${!SIZES[@]}"; do
-            SIZE="${SIZES[$i]}"
-            BYTES="${BYTES_LIST[$i]}"
-            BUILD_DIR="build-RETROMAGIC_RP2350_${SIZE}MB"
-            TARGET_FILENAME="RetroMagic_MicroPython_RP2350_${SIZE}MB_${CLEAN_MP_VERSION}.uf2"
+          for i in "\${!SIZES[@]}"; do
+            SIZE="\({SIZES[\)i]}"
+            BYTES="\({BYTES_LIST[\)i]}"
+            BUILD_DIR="build-RETROMAGIC_RP2350_\${SIZE}MB"
+            TARGET_FILENAME="RetroMagic_MicroPython_RP2350_\({SIZE}MB_\){CLEAN_MP_VERSION}.uf2"
 
             echo "=================================================="
-            echo "🚀 开始编译 ${SIZE}MB 版本 (Flash Bytes: ${BYTES})..."
+            echo "🚀 开始编译 \${SIZE}MB 版本 (Flash Bytes: \${BYTES})..."
             echo "=================================================="
 
-            rm -rf "${BUILD_DIR}"
+            rm -rf "\${BUILD_DIR}"
 
             make BOARD=RETROMAGIC_RP2350 \
-                 BUILD="${BUILD_DIR}" \
-                 CMAKE_ARGS="-DPICO_FLASH_SIZE_BYTES=${BYTES} -DPICO_EMBED_XIP_SETUP=1 -DPICO_FLASH_SPI_CLKDIV=6" \
-                 -j$(nproc)
+                 BUILD="\${BUILD_DIR}" \
+                 CMAKE_ARGS="-DPICO_FLASH_SIZE_BYTES=\${BYTES} -DPICO_EMBED_XIP_SETUP=1 -DPICO_FLASH_SPI_CLKDIV=6" \
+                 -j\$(nproc)
 
-            if [ -f "${BUILD_DIR}/firmware.uf2" ]; then
-              cp "${BUILD_DIR}/firmware.uf2" "../../${TARGET_FILENAME}"
-              echo "✅ 编译成功: ${TARGET_FILENAME}"
+            if [ -f "\${BUILD_DIR}/firmware.uf2" ]; then
+              cp "\({BUILD_DIR}/firmware.uf2" "../../\){TARGET_FILENAME}"
+              echo "✅ 编译成功: \${TARGET_FILENAME}"
             else
-              echo "❌ 编译失败: 未生成 ${BUILD_DIR}/firmware.uf2"
+              echo "❌ 编译失败: 未生成 \${BUILD_DIR}/firmware.uf2"
               exit 1
             fi
           done
@@ -127,11 +131,11 @@ jobs:
       - name: Verify UF2 Architecture Safety (Family ID Check)
         if: steps.check_release.outputs.should_build == 'true'
         run: |
-          UF2_FILE=$(ls RetroMagic_MicroPython_RP2350_4MB_*.uf2 | head -n 1)
-          if [ -f "$UF2_FILE" ]; then
-            echo "🔍 检查 UF2 文件架构: $UF2_FILE"
+          UF2_FILE=\$(ls RetroMagic_MicroPython_RP2350_4MB_*.uf2 | head -n 1)
+          if [ -f "\$UF2_FILE" ]; then
+            echo "🔍 检查 UF2 文件架构: \$UF2_FILE"
             python3 -c "
-          with open('$UF2_FILE', 'rb') as f:
+          with open('\$UF2_FILE', 'rb') as f:
               data = f.read(512)
               family_id = int.from_bytes(data[28:32], 'little')
               print(f'Family ID: {hex(family_id)}')
@@ -145,8 +149,8 @@ jobs:
       - name: Generate Release Notes File
         if: steps.check_release.outputs.should_build == 'true'
         run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
-          COMMIT="${{ steps.get_version.outputs.commit }}"
+          VERSION="\${{ steps.get_version.outputs.version }}"
+          COMMIT="\${{ steps.get_version.outputs.commit }}"
           cat << EOF > release_notes.md
           # RetroMagic RP2350 Custom MicroPython Firmware
 
@@ -154,7 +158,7 @@ jobs:
 
           - **MicroPython 版本**: \`${VERSION}\`
           - **Commit Hash**: \`${COMMIT}\`
-          - **构建时间**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          - **构建时间**: \$(date -u '+%Y-%m-%d %H:%M:%S UTC')
 
           ### 固件列表：
           - \`RetroMagic_MicroPython_RP2350_2MB_${VERSION}.uf2\`
@@ -167,9 +171,10 @@ jobs:
         if: steps.check_release.outputs.should_build == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          name: RetroMagic MicroPython RP2350 (${{ steps.get_version.outputs.version }})
+          # 🛠️ 3. 修改点：使用上面 Smart Check 动态输出的标签名
+          tag_name: \${{ steps.check_release.outputs.final_tag }}
+          name: RetroMagic MicroPython RP2350 (\${{ steps.check_release.outputs.final_tag }})
           body_path: release_notes.md
           files: RetroMagic_MicroPython_RP2350_*.uf2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
